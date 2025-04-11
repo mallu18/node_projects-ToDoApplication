@@ -73,15 +73,26 @@ const validateBody = (req, res, next) => {
 // API 1 - GET /todos/
 app.get('/todos/', validateQuery, async (req, res) => {
   const {status, priority, search_q = '', category} = req.query
-  let query = `SELECT * FROM todo WHERE todo LIKE '%${search_q}%'`
-  if (status) query += ` AND status = '${status}'`
-  if (priority) query += ` AND priority = '${priority}'`
-  if (category) query += ` AND category = '${category}'`
 
+  const conditions = []
+  if (status) conditions.push(`status = '${status}'`)
+  if (priority) conditions.push(`priority = '${priority}'`)
+  if (category) conditions.push(`category = '${category}'`)
+  if (search_q) conditions.push(`todo LIKE '%${search_q}%'`)
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const query = `SELECT * FROM todo ${whereClause}`
   const todos = await db.all(query)
+
   res.send(
     todos.map(todo => ({
-      ...todo,
+      id: todo.id,
+      todo: todo.todo,
+      priority: todo.priority,
+      status: todo.status,
+      category: todo.category,
       dueDate: todo.due_date,
     })),
   )
@@ -93,7 +104,11 @@ app.get('/todos/:todoId/', async (req, res) => {
   const todo = await db.get('SELECT * FROM todo WHERE id = ?', [todoId])
   if (todo) {
     res.send({
-      ...todo,
+      id: todo.id,
+      todo: todo.todo,
+      priority: todo.priority,
+      status: todo.status,
+      category: todo.category,
       dueDate: todo.due_date,
     })
   } else {
@@ -112,7 +127,11 @@ app.get('/agenda/', async (req, res) => {
   ])
   res.send(
     todos.map(todo => ({
-      ...todo,
+      id: todo.id,
+      todo: todo.todo,
+      priority: todo.priority,
+      status: todo.status,
+      category: todo.category,
       dueDate: todo.due_date,
     })),
   )
@@ -133,6 +152,33 @@ app.post('/todos/', validateBody, async (req, res) => {
 })
 
 // API 5 - PUT /todos/:todoId/
+
+// app.put('/todos/:todoId/', validateBody, async (req, res) => {
+//   const {todoId} = req.params
+//   const fields = ['status', 'priority', 'todo', 'category', 'dueDate']
+//   const updates = {}
+
+//   fields.forEach(field => {
+//     if (req.body[field] !== undefined) {
+//       updates[field] =
+//         field === 'dueDate' ? formatDate(req.body[field]) : req.body[field]
+//     }
+//   })
+
+//   const updateKeys = Object.keys(updates)
+//   if (updateKeys.length === 0) return res.status(400).send('No Updates Found')
+
+//   const [field] = updateKeys
+//   const dbField = field === 'dueDate' ? 'due_date' : field
+
+//   await db.run(`UPDATE todo SET ${dbField} = ? WHERE id = ?`, [
+//     updates[field],
+//     todoId,
+//   ])
+
+//   res.send(`${field[0].toUpperCase() + field.slice(1)} Updated`)
+// })
+
 app.put('/todos/:todoId/', validateBody, async (req, res) => {
   const {todoId} = req.params
   const fields = ['status', 'priority', 'todo', 'category', 'dueDate']
@@ -156,7 +202,15 @@ app.put('/todos/:todoId/', validateBody, async (req, res) => {
     todoId,
   ])
 
-  res.send(`${field[0].toUpperCase() + field.slice(1)} Updated`)
+  const fieldMap = {
+    status: 'Status',
+    priority: 'Priority',
+    todo: 'Todo',
+    category: 'Category',
+    dueDate: 'Due Date',
+  }
+
+  res.send(`${fieldMap[field]} Updated`)
 })
 
 // API 6 - DELETE /todos/:todoId/
